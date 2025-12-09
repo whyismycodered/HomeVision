@@ -14,8 +14,6 @@ import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import { hp, wp } from '../../helpers/common';
 
-const BACKEND_UPLOAD_URL = 'http://192.168.68.119:8000/camera';
-
 export default function HVCam() {
   const [hasPermission, setHasPermission] = useState(null);
   const [cameraType, setCameraType] = useState('back');
@@ -24,28 +22,6 @@ export default function HVCam() {
 
   const uploadAndGo = async (uri) => {
     try {
-      setUploading(true);
-
-      let formData = new FormData();
-      formData.append('photo', {
-        uri: uri,
-        name: 'photo.jpg',
-        type: 'image/jpeg',
-      });
-
-      const response = await fetch(BACKEND_UPLOAD_URL, {
-        method: 'POST',
-        body: formData,
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error('Upload failed: ' + errorText);
-      }
-
       // Go to wAIs chat with the image
       router.push({
         pathname: '/(tabs)/wAIschat',
@@ -53,9 +29,7 @@ export default function HVCam() {
       });
 
     } catch (error) {
-      Alert.alert('Upload Error', error.message);
-    } finally {
-      setUploading(false);
+      Alert.alert('Error', error.message);
     }
   };
 

@@ -14,7 +14,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams } from 'expo-router';
 import { hp, wp } from '../../helpers/common';
 
-const BACKEND_INSTALLMENT_URL = 'http://192.168.68.119:8000/installment-items';
+const BACKEND_INSTALLMENT_URL = 'http://192.168.68.109:8000/installment-items';
 const MONTH_OPTIONS = [6, 12, 18, 24];
 
 export default function InstallmentSimulator() {

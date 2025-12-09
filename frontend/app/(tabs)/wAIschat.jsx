@@ -17,17 +17,16 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { hp, wp } from '../../helpers/common';
 
-const BACKEND_AI_URL = 'http://192.168.68.119:8000/generate-design';
+const BACKEND_URL = 'http://192.168.68.109:8000/renovate';
 
-export default function WAIs() {
+export default function DesignRequest() {
   const { imageUri } = useLocalSearchParams();
-  const [designIdea, setDesignIdea] = useState('');
-  const [budget, setBudget] = useState('');
+  const [style, setStyle] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async () => {
-    if (!designIdea.trim()) {
-      Alert.alert('Input Required', 'Please describe the design you want');
+    if (!style.trim()) {
+      Alert.alert('Input Required', 'Please describe the design style you want');
       return;
     }
 
@@ -40,15 +39,14 @@ export default function WAIs() {
       setLoading(true);
 
       const formData = new FormData();
-      formData.append('photo', {
+      formData.append('file', {
         uri: imageUri,
         name: 'room.jpg',
         type: 'image/jpeg',
       });
-      formData.append('designIdea', designIdea);
-      formData.append('budget', budget || '');
+      formData.append('style', style);
 
-      const response = await fetch(BACKEND_AI_URL, {
+      const response = await fetch(BACKEND_URL, {
         method: 'POST',
         body: formData,
         headers: {
@@ -58,18 +56,16 @@ export default function WAIs() {
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error('AI request failed: ' + errorText);
+        throw new Error('Renovation failed: ' + errorText);
       }
 
       const result = await response.json();
       
-      // Success - navigate to results page with the AI response
-      // Expected result format: { designId, generatedImageUrl, items: [...] }
+      // Navigate to results page with the design ID
       router.push({
         pathname: '/(tabs)/imageDisplay',
         params: {
-          designId: result.designId || Date.now().toString(),
-          generatedImageUri: result.generatedImageUrl || result.designImageUrl,
+          designId: result.designId,
         },
       });
 
@@ -89,7 +85,7 @@ export default function WAIs() {
         <ScrollView contentContainerStyle={styles.scrollContent}>
           {/* Header */}
           <Text style={styles.title}>HomeVision</Text>
-          <Text style={styles.subtitle}>Describe the design you want to HomeVision</Text>
+          <Text style={styles.subtitle}>Visualize your dream room</Text>
 
           {/* Big Image Box */}
           <View style={styles.imageBox}>
@@ -102,29 +98,15 @@ export default function WAIs() {
             )}
           </View>
 
-          {/* Input 1: Design Description */}
+          {/* Input: Design Style */}
           <View style={styles.inputContainer}>
-            <Text style={styles.label}>What kind of design do you want?</Text>
+            <Text style={styles.label}>What style do you want?</Text>
             <TextInput
               style={styles.textInput}
-              placeholder="e.g. Modern minimalist living room, luxury bathroom, cozy bedroom..."
+              placeholder="e.g. Modern, Japandi, Industrial..."
               placeholderTextColor="#aaa"
-              multiline
-              numberOfLines={4}
-              value={designIdea}
-              onChangeText={setDesignIdea}
-            />
-          </View>
-
-          {/* Input 2: Budget */}
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Be wAIs with your budget</Text>
-            <TextInput
-              style={[styles.textInput, { height: hp(7.5) }]}
-              placeholder="Tell wAIs your budget"
-              placeholderTextColor="#aaa"
-              value={budget}
-              onChangeText={setBudget}
+              value={style}
+              onChangeText={setStyle}
             />
           </View>
 
@@ -138,7 +120,7 @@ export default function WAIs() {
               <ActivityIndicator size="small" color="#fff" />
             ) : (
               <>
-                <Text style={styles.submitText}>Generate My Design</Text>
+                <Text style={styles.submitText}>Renovate Room</Text>
                 <Ionicons name="sparkles" size={wp(6)} color="#fff" style={{ marginLeft: wp(2.5) }} />
               </>
             )}

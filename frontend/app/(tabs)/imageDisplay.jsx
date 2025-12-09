@@ -10,31 +10,32 @@ import {
   SafeAreaView,
   ActivityIndicator,
   Alert,
+  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { hp, wp } from '../../helpers/common';
 
-const BACKEND_RESULTS_URL = 'http://192.168.68.119:8000/design-results';
+const BACKEND_RESULTS_URL = 'http://192.168.68.109:8000/design-results';
 
 export default function WAIsResult() {
   const params = useLocalSearchParams();
-  const { designId, generatedImageUri } = params;
+  const { designId } = params;
   
   const [loading, setLoading] = useState(true);
-  const [designImage, setDesignImage] = useState(generatedImageUri || null);
+  const [designImage, setDesignImage] = useState(null);
   const [detectedItems, setDetectedItems] = useState([]);
+  const [modalVisible, setModalVisible] = useState(false);
 
   useEffect(() => {
-    fetchDesignResults();
+    if (designId) {
+      fetchDesignResults();
+    } else {
+      Alert.alert('Error', 'No design ID provided');
+      setLoading(false);
+    }
   }, [designId]);
 
   const fetchDesignResults = async () => {
-    if (!designId) {
-      Alert.alert('Error', 'No design ID provided');
-      setLoading(false);
-      return;
-    }
-
     try {
       const response = await fetch(`${BACKEND_RESULTS_URL}/${designId}`);
       
@@ -44,24 +45,23 @@ export default function WAIsResult() {
 
       const data = await response.json();
       
-      // Expected response format:
-      // {
-      //   designImageUrl: "url_to_ai_generated_image",
-      //   items: [
-      //     { id, name, price, installment, image },
-      //     ...
-      //   ]
-      // }
+      // Handle potential URL encoding issues with base64
+      const formattedImageUri = data.image?.replace(/ /g, '+');
+      setDesignImage(formattedImageUri);
       
-      if (data.designImageUrl) {
-        setDesignImage(data.designImageUrl);
-      }
+      // Map backend inventory to frontend format
+      const inventory = data.inventory.map(item => ({
+        name: item.item_name,
+        price: `₱${item.estimated_price_php.toLocaleString()}`,
+        category: item.category,
+        description: item.visual_description,
+      }));
       
-      setDetectedItems(data.items || []);
+      setDetectedItems(inventory);
       
     } catch (error) {
-      Alert.alert('Error', error.message || 'Failed to load design results');
-      setDetectedItems([]);
+      console.error("Fetch error:", error);
+      Alert.alert('Error', 'Failed to load design results');
     } finally {
       setLoading(false);
     }
@@ -98,24 +98,51 @@ export default function WAIsResult() {
     <SafeAreaView style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* AI-Generated Redesigned Room Image */}
-        <View style={styles.imageContainer}>
-          {designImage ? (
-            <Image
-              source={{ uri: designImage }}
-              style={styles.redesignedImage}
-              resizeMode="cover"
-            />
-          ) : (
-            <View style={[styles.redesignedImage, styles.placeholderImage]}>
-              <Ionicons name="image-outline" size={80} color="#ccc" />
-              <Text style={styles.placeholderText}>No design image available</Text>
+        <TouchableOpacity onPress={() => designImage && setModalVisible(true)} activeOpacity={0.9}>
+          <View style={styles.imageContainer}>
+            {designImage ? (
+              <Image
+                source={{ uri: designImage }}
+                style={styles.redesignedImage}
+                resizeMode="cover"
+              />
+            ) : (
+              <View style={[styles.redesignedImage, styles.placeholderImage]}>
+                <Ionicons name="image-outline" size={80} color="#ccc" />
+                <Text style={styles.placeholderText}>No design image available</Text>
+              </View>
+            )}
+            <View style={styles.overlay}>
+              <Ionicons name="sparkles" size={32} color="#fff" />
+              <Text style={styles.overlayText}>Your Dream Room by HomeVision</Text>
+              <Text style={styles.tapToViewText}>Tap to view full image</Text>
             </View>
-          )}
-          <View style={styles.overlay}>
-            <Ionicons name="sparkles" size={32} color="#fff" />
-            <Text style={styles.overlayText}>Your Dream Room by HomeVision</Text>
           </View>
-        </View>
+        </TouchableOpacity>
+
+        {/* Full Screen Image Modal */}
+        <Modal
+          animationType="fade"
+          transparent={true}
+          visible={modalVisible}
+          onRequestClose={() => setModalVisible(false)}
+        >
+          <View style={styles.modalContainer}>
+            <TouchableOpacity 
+              style={styles.closeButton} 
+              onPress={() => setModalVisible(false)}
+            >
+              <Ionicons name="close-circle" size={40} color="#fff" />
+            </TouchableOpacity>
+            {designImage && (
+              <Image
+                source={{ uri: designImage }}
+                style={styles.fullScreenImage}
+                resizeMode="contain"
+              />
+            )}
+          </View>
+        </Modal>
 
         {/* Title */}
         <View style={styles.header}>
@@ -130,17 +157,18 @@ export default function WAIsResult() {
         {/* Vertical List of Items */}
         <View style={styles.itemsList}>
           {detectedItems.length > 0 ? (
-            detectedItems.map((item) => (
-              <TouchableOpacity key={item.id} style={styles.itemCard}>
-                <Image source={{ uri: item.image }} style={styles.itemImage} />
+            detectedItems.map((item, index) => (
+              <TouchableOpacity key={index} style={styles.itemCard}>
                 <View style={styles.itemInfo}>
-                  <Text style={styles.itemName} numberOfLines={2}>
+                  <Text style={styles.itemName}>
                     {item.name}
                   </Text>
-                  <Text style={styles.itemPrice}>as low as</Text>
-                  <Text style={styles.priceAmount}>{item.installment || item.price}</Text>
+                  <Text style={styles.itemDescription} numberOfLines={3}>
+                    {item.description}
+                  </Text>
+                  <Text style={styles.priceAmount}>{item.price}</Text>
                 </View>
-                <Ionicons name="chevron-forward" size={28} color="#ccc" />
+                <Ionicons name="chevron-forward" size={24} color="#ccc" />
               </TouchableOpacity>
             ))
           ) : (
@@ -209,6 +237,28 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginTop: 12,
   },
+  tapToViewText: {
+    color: '#fff',
+    fontSize: 14,
+    marginTop: 8,
+    opacity: 0.8,
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  closeButton: {
+    position: 'absolute',
+    top: 50,
+    right: 20,
+    zIndex: 1,
+  },
+  fullScreenImage: {
+    width: '100%',
+    height: '80%',
+  },
   header: {
     padding: 20,
     paddingTop: 30,
@@ -248,13 +298,18 @@ const styles = StyleSheet.create({
   },
   itemInfo: {
     flex: 1,
-    marginLeft: 16,
   },
   itemName: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 18,
+    fontWeight: 'bold',
     color: '#333',
-    marginBottom: 6,
+    marginBottom: 4,
+  },
+  itemDescription: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 8,
+    lineHeight: 20,
   },
   itemPrice: {
     fontSize: 14,
