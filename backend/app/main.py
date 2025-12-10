@@ -1,6 +1,7 @@
 import os
 import base64
 import json
+import uuid
 from dotenv import load_dotenv
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.responses import JSONResponse
@@ -8,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from google import genai
 from google.genai import types
 from pydantic import BaseModel
+from typing import List, Optional
 
 load_dotenv()
 
@@ -19,6 +21,9 @@ if not api_key:
     raise RuntimeError("Missing required environment variable: GOOGLE_API_KEY")
 
 app = FastAPI()
+
+# In-memory storage for designs (for demo purposes)
+designs = {}
 
 # Allow your Expo app (phone) to talk to this server
 app.add_middleware(
@@ -36,6 +41,14 @@ class InventoryItem(BaseModel):
     category: str
     visual_description: str
     estimated_price_php: int 
+
+class InstallmentApplication(BaseModel):
+    designId: str
+    items: List[dict]
+    downPayment: int
+    installmentMonths: int
+    monthlyPayment: int
+    totalAmount: int
 
 @app.get("/")
 def health_check():
@@ -63,7 +76,7 @@ async def renovate(file: UploadFile = File(...), style: str = Form("Modern")):
                 types.Content(
                     role="user",
                     parts=[
-                        types.Part.from_text(paint_prompt),
+                        types.Part.from_text(text=paint_prompt),
                         types.Part.from_bytes(data=user_image_bytes, mime_type="image/jpeg")
                     ]
                 )
@@ -103,7 +116,7 @@ async def renovate(file: UploadFile = File(...), style: str = Form("Modern")):
                 types.Content(
                     role="user",
                     parts=[
-                        types.Part.from_text(observer_prompt),
+                        types.Part.from_text(text=observer_prompt),
                         types.Part.from_bytes(data=generated_image_bytes, mime_type="image/png")
                     ]
                 )
@@ -120,12 +133,57 @@ async def renovate(file: UploadFile = File(...), style: str = Form("Modern")):
 
         # Prepare Response (Base64 Image + JSON)
         b64_image = base64.b64encode(generated_image_bytes).decode("utf-8")
-
-        return {
+        
+        # Store in memory
+        design_id = str(uuid.uuid4())
+        designs[design_id] = {
             "image": f"data:image/png;base64,{b64_image}",
             "inventory": furniture_json
         }
 
+        return {"designId": design_id}
+
     except Exception as e:
         print(f"❌ Error: {e}")
         return JSONResponse(content={"error": str(e)}, status_code=500)
+
+@app.get("/design-results/{design_id}")
+async def get_design_results(design_id: str):
+    if design_id not in designs:
+        raise HTTPException(status_code=404, detail="Design not found")
+    return designs[design_id]
+
+@app.get("/installment-items/{design_id}")
+async def get_installment_items(design_id: str):
+    if design_id not in designs:
+        raise HTTPException(status_code=404, detail="Design not found")
+    
+    # Return items in the format expected by the installation page
+    # The installation page expects { items: [{ id, name, price, image, specs?, description? }] }
+    inventory = designs[design_id]["inventory"]
+    
+    # Map inventory to the expected format
+    items = []
+    for idx, item in enumerate(inventory):
+        items.append({
+            "id": str(idx),
+            "name": item["item_name"],
+            "price": item["estimated_price_php"],
+            "description": item["visual_description"],
+            "category": item["category"],
+            # Since we don't have individual images, we can use a placeholder or the main design image
+            "image": "https://placehold.co/400x400/png?text=Furniture" 
+        })
+        
+    return {"items": items}
+
+@app.post("/installment-items/apply")
+async def apply_installment(application: InstallmentApplication):
+    print(f"📝 Received installment application for Design {application.designId}")
+    print(f"   Items: {len(application.items)}")
+    print(f"   Down Payment: {application.downPayment}")
+    print(f"   Monthly: {application.monthlyPayment} for {application.installmentMonths} months")
+    print(f"   Total Amount: {application.totalAmount}")
+    
+    # In a real app, you would save this to a database
+    return {"status": "success", "message": "Application received"}
