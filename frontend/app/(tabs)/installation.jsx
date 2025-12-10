@@ -36,7 +36,14 @@ export default function InstallmentSimulator() {
       // If items passed via params, parse them
       if (itemsParam) {
         const parsedItems = JSON.parse(itemsParam);
-        setProducts(parsedItems);
+        // Sanitize prices (convert strings like "₱30,000" back to numbers)
+        const sanitizedItems = parsedItems.map(item => ({
+            ...item,
+            price: typeof item.price === 'string' 
+                ? parseFloat(item.price.replace(/[^0-9.]/g, '')) 
+                : item.price
+        }));
+        setProducts(sanitizedItems);
         setLoading(false);
         return;
       }
@@ -190,9 +197,9 @@ export default function InstallmentSimulator() {
           )}
 
           {/* Individual Products */}
-          {products.map((product) => (
+          {products.map((product, index) => (
             <TouchableOpacity
-              key={product.id}
+              key={product.id || index}
               onPress={() => handleProductClick(product.id)}
               style={[
                 styles.productCard,
